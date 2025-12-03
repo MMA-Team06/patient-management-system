@@ -1,0 +1,48 @@
+# Node modules (NEVER COMMIT THESE!)
+node_modules/
+backend/node_modules/
+frontend/node_modules/
+
+# Environment variables (CONTAIN PASSWORDS!)
+.env
+backend/.env
+frontend/.env
+*.env.local
+
+# Package locks (team should generate their own)
+package-lock.json
+backend/package-lock.json
+frontend/package-lock.json
+yarn.lock
+
+# Build outputs
+dist/
+build/
+frontend/dist/
+
+# IDE and Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Test coverage
+coverage/
+.nyc_output/
+*.lcov
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# SonarQube
+.scannerwork/
+.sonar/
