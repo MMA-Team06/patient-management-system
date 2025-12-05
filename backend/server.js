@@ -70,6 +70,51 @@ app.post('/api/patients', async (req, res) => {
   }
 });
 
+// Get Patient Route 
+app.get('/api/patients', async (req, res) => {
+  try {
+    const { sort, search } = req.query;
+    let query = 'SELECT * FROM patients';
+    let whereClauses = [];
+    let queryParams = [];
+
+    // Add search if requested
+    if (search) {
+      whereClauses.push(`(first_name LIKE ? OR last_name LIKE ? OR email LIKE ? OR phone LIKE ?)`);
+      const searchTerm = `%${search}%`;
+      queryParams.push(searchTerm, searchTerm, searchTerm, searchTerm);
+    }
+
+    // Combine WHERE clauses if any exist
+    if (whereClauses.length > 0) {
+      query += ' WHERE ' + whereClauses.join(' AND ');
+    }
+
+    // Add sorting if requested
+    if (sort) {
+      const [field, order] = sort.split(':');
+      const validFields = ['first_name', 'last_name', 'date_of_birth'];
+      if (validFields.includes(field) && ['asc', 'desc'].includes(order)) {
+        query += ` ORDER BY ${field} ${order.toUpperCase()}`;
+      }
+    }
+
+    const [patients] = await pool.query(query, queryParams);
+
+    if (patients.length === 0) {
+      return res.status(404).json([]);
+    }
+
+    res.json(patients);
+  } catch (error) {
+    console.error('Database error:', error);
+    res.status(500).json({
+      error: 'Database error',
+      message: error.message
+    });
+  }
+});
+
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error('Server error:', err);
