@@ -115,6 +115,48 @@ app.get('/api/patients', async (req, res) => {
   }
 });
 
+// Update Patient Route
+app.put('/api/patients/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { first_name, last_name, date_of_birth, gender, phone, email } = req.body;
+
+    // Basic validation
+    if (!first_name || !last_name || !date_of_birth || !gender) {
+      return res.status(400).json({
+        error: 'Validation failed',
+        message: 'First name, last name, date of birth, and gender are required'
+      });
+    }
+
+    const [result] = await pool.execute(
+      `UPDATE patients 
+       SET first_name = ?, last_name = ?, date_of_birth = ?, gender = ?, phone = ?, email = ? 
+       WHERE id = ?`,
+      [first_name, last_name, date_of_birth, gender, phone, email, id]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({
+        error: 'Patient not found',
+        message: `No patient found with ID ${id}`
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Patient updated successfully',
+      patientId: id
+    });
+  } catch (error) {
+    console.error('Database error:', error);
+    res.status(500).json({
+      error: 'Database operation failed',
+      message: error.message
+    });
+  }
+});
+
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error('Server error:', err);
