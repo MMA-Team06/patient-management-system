@@ -157,6 +157,37 @@ app.put('/api/patients/:id', async (req, res) => {
   }
 });
 
+// Delete Patient Route
+app.delete('/api/patients/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const [result] = await pool.execute(
+      'DELETE FROM patients WHERE id = ?',
+      [id]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({
+        error: 'Patient not found',
+        message: `No patient found with ID ${id}`
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Patient deleted successfully',
+      patientId: id
+    });
+  } catch (error) {
+    console.error('Database error:', error);
+    res.status(500).json({
+      error: 'Database operation failed',
+      message: error.message
+    });
+  }
+});
+
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error('Server error:', err);
