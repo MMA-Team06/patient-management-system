@@ -261,3 +261,170 @@
     </div>
   </div>
 </template>
+<script>
+import { debounce } from 'lodash';
+
+export default {
+  data() {
+    return {
+      patients: [],
+      loading: false,
+      error: '',
+      sortField: 'first_name:asc',
+      searchQuery: '',
+      editingPatient: null,
+      viewingPatient: null,
+      showDeleteConfirm: false,
+      patientToDelete: null,
+      searchDebounce: null
+    };
+  },
+  created() {
+    this.searchDebounce = debounce(this.fetchPatients, 500);
+  },
+  watch: {
+    sortField() {
+      this.fetchPatients();
+    }
+  },
+  mounted() {
+    this.fetchPatients();
+  },
+  methods: {
+  async fetchPatients() {
+    this.loading = true;
+    this.error = '';
+    
+    try {
+      const response = await fetch(
+        `http://localhost:3000/api/patients?sort=${this.sortField}&search=${encodeURIComponent(this.searchQuery)}`
+      );
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch patients');
+      }
+      
+      const data = await response.json();
+      this.patients = data;
+    } catch (error) {
+      this.error = error.message;
+    } finally {
+      this.loading = false;
+    }
+  },
+    handleSearch() {
+      this.searchDebounce();
+    },
+    formatDate(dateString) {
+      if (!dateString) return 'N/A';
+      const date = new Date(dateString);
+      return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    },
+    formatPhone(phone) {
+      if (!phone) return '';
+      let cleaned = phone.trim().replace(/(?!^\+)[^\d]/g, '');
+      if (cleaned.startsWith('00')) {
+        cleaned = '+' + cleaned.slice(2);
+      }
+      return cleaned.replace(/(\+?\d{1,3})(\d{2,3})(\d{2,3})(\d{2,3})(\d{0,3})/, 
+                            (_, p1, p2, p3, p4, p5) => {
+        return [p1, p2, p3, p4, p5].filter(Boolean).join(' ');
+      });
+    },
+    viewPatientDetails(patient) {
+      this.viewingPatient = { ...patient };
+    },
+    closeViewModal() {
+      this.viewingPatient = null;
+    },
+    editPatient(patient) {
+      this.editingPatient = { ...patient };
+      this.viewingPatient = null;
+    },
+    cancelEdit() {
+      this.editingPatient = null;
+    },
+async updatePatient() {
+  // Validate required fields
+  const requiredFields = ['first_name', 'last_name', 'date_of_birth'];
+  const missingFields = requiredFields.filter(field => !this.editingPatient[field]);
+  
+  if (missingFields.length > 0) {
+    this.error = `Missing required fields: ${missingFields.join(', ')}`;
+    return;
+  }
+
+  this.updating = true;
+  this.error = '';
+  
+  try {
+    const patientData = { ...this.editingPatient };
+    Object.keys(patientData).forEach(key => {
+      if (patientData[key] === '') patientData[key] = null;
+    });
+
+    console.log('Attempting to update patient:', patientData);
+
+    const response = await fetch(`http://localhost:3000/api/patients/${this.editingPatient.id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify(patientData)
+    });
+
+    const responseData = await response.json();
+    
+    if (!response.ok) {
+      console.error('Update failed:', responseData);
+      throw new Error(responseData.message || `Server returned status ${response.status}`);
+    }
+
+    console.log('Update successful:', responseData);
+    
+    // Update local state
+    const index = this.patients.findIndex(p => p.id === responseData.id);
+    if (index !== -1) {
+      this.patients.splice(index, 1, responseData);
+    } else {
+      // If patient wasn't in the list, refresh the entire list
+      this.fetchPatients();
+    }
+
+    this.editingPatient = null;
+    
+    
+  } catch (error) {
+    console.error('Update error:', error);
+    this.error = error.message;
+    alert(`Failed to update patient: ${error.message}`);
+  } finally {
+    this.updating = false;
+  }
+},
+    confirmDelete(patientId) {
+      this.patientToDelete = patientId;
+      this.showDeleteConfirm = true;
+    },
+    async deletePatient() {
+      try {
+        const response = await fetch(`http://localhost:3000/api/patients/${this.patientToDelete}`, {
+          method: 'DELETE'
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to remove patient');
+        }
+
+        this.patients = this.patients.filter(p => p.id !== this.patientToDelete);
+        this.showDeleteConfirm = false;
+        this.patientToDelete = null;
+      } catch (error) {
+        this.error = error.message;
+      }
+    },
+
+  }
+};
+</script>
