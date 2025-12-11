@@ -232,3 +232,34 @@ app.post('/api/appointments', async (req, res) => {
     res.status(500).json({ error: 'Failed to create appointment' });
   }
 });
+// Delete Appointment Route
+app.delete('/api/appointments/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const [result] = await pool.execute(
+      'DELETE FROM appointments WHERE id = ?',
+      [id]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({
+        error: 'Appointment not found',
+        message: `No appointment found with ID ${id}`
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Appointment deleted successfully',
+      appointmentId: id
+    });
+
+  } catch (error) {
+    console.error('Database error:', error);
+    res.status(500).json({
+      error: 'Database operation failed',
+      message: error.message
+    });
+  }
+});
