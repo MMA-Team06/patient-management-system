@@ -326,3 +326,35 @@ app.post('/api/prescriptions', async (req, res) => {
     });
   }
 });
+       // Delete Prescription Route
+app.delete('/api/prescriptions/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const [result] = await pool.execute(
+      'DELETE FROM prescriptions WHERE id = ?',
+      [id]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({
+        error: 'Prescription not found',
+        message: `No prescription found with ID ${id}`
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Prescription deleted successfully',
+      prescriptionId: id
+    });
+
+  } catch (error) {
+    console.error('Database error:', error);
+    res.status(500).json({
+      error: 'Database operation failed',
+      message: error.message
+    });
+  }
+});
+
