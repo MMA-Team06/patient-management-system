@@ -265,3 +265,64 @@ app.delete('/api/appointments/:id', async (req, res) => {
 });
 // Delete Appointment Route
 //aa
+    //--------- Prescripions --------- :
+        // Get Prescripion Route
+app.get('/api/prescriptions', async (req, res) => {
+  try {
+    const [prescriptions] = await pool.query('SELECT * FROM prescriptions');
+    res.json(prescriptions);
+  } catch (error) {
+    console.error('Error fetching prescriptions:', error);
+    res.status(500).json({ error: 'Failed to fetch prescriptions' });
+  }
+});
+        // Create Prescripion Route
+app.post('/api/prescriptions', async (req, res) => {
+  try {
+    const { patient_id, issue_date, expiry_date, medications, notes } = req.body;
+    
+    // Validate required fields
+    if (!patient_id || !issue_date) {
+      return res.status(400).json({ 
+        error: 'Validation failed',
+        message: 'Patient ID and issue date are required'
+      });
+    }
+    
+    // Validate medications
+    if (!medications || !Array.isArray(medications)){
+      return res.status(400).json({ 
+        error: 'Validation failed',
+        message: 'Medications must be provided as an array'
+      });
+    }
+    
+    for (const med of medications) {
+      if (!med.name || !med.dosage || !med.frequency || !med.duration) {
+        return res.status(400).json({ 
+          error: 'Validation failed',
+          message: 'All medication fields (name, dosage, frequency, duration) are required'
+        });
+      }
+    }
+
+    const [result] = await pool.execute(
+      `INSERT INTO prescriptions 
+      (patient_id, issue_date, expiry_date, medications, notes) 
+      VALUES (?, ?, ?, ?, ?)`,
+      [patient_id, issue_date, expiry_date || null, JSON.stringify(medications), notes || null]
+    );
+    
+    res.status(201).json({
+      id: result.insertId,
+      message: 'Prescription created successfully'
+    });
+  } catch (error) {
+    console.error('Error creating prescription:', error);
+    res.status(500).json({ 
+      error: 'Failed to create prescription',
+      message: error.message,
+      ...(error.sqlMessage && { sqlMessage: error.sqlMessage })
+    });
+  }
+});
