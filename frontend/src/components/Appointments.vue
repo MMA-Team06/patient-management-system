@@ -168,3 +168,162 @@
     </div>
   </div>
 </template>
+<script>
+import { debounce } from 'lodash';
+
+export default {
+  name: 'AppointmentsManagement', 
+  data() {
+    return {
+      appointments: [],
+      patients: [],
+      loading: false,
+      error: '',
+      filterStatus: 'upcoming',
+      searchQuery: '',
+      selectedDate: new Date().toISOString().split('T')[0],
+      viewingAppointment: null,
+      showDeleteConfirm: false,
+      appointmentToDelete: null,
+      searchDebounce: null
+    };
+  },
+  created() {
+    this.searchDebounce = debounce(this.fetchAppointments, 500);
+  },
+  mounted() {
+    this.fetchAppointments();
+    this.fetchPatients();
+  },
+  methods: {
+    async fetchAppointments() {
+      this.loading = true;
+      this.error = '';
+      
+      try {
+        let url = `http://localhost:3000/api/appointments?status=${this.filterStatus}&date=${this.selectedDate}&search=${this.searchQuery}&page=${this.currentPage}&limit=${this.itemsPerPage}`;
+        
+        const response = await fetch(url);
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch appointments');
+        }
+        
+        const data = await response.json();
+        this.appointments = data.appointments || data;
+      } catch (error) {
+        this.error = error.message;
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    async fetchPatients() {
+      try {
+        const response = await fetch('http://localhost:3000/api/patients');
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch patients');
+        }
+        
+        const data = await response.json();
+        this.patients = data;
+      } catch (error) {
+        console.error('Error fetching patients:', error);
+      }
+    },
+    handleSearch() {
+      this.searchDebounce();
+    },
+    formatDateTime(dateTime) {
+      if (!dateTime) return null;
+      const date = new Date(dateTime);
+      return date.toLocaleString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      });
+    },
+    formatTime(time) {
+      if (!time) return null;
+      
+      if (time.includes('T')) {
+        const date = new Date(time);
+        return date.toLocaleString('en-US', {
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+      }
+      
+      const [hours, minutes] = time.split(':');
+      const hour = parseInt(hours, 10);
+      const ampm = hour >= 12 ? 'PM' : 'AM';
+      const hour12 = hour % 12 || 12;
+      return `${hour12}:${minutes} ${ampm}`;
+    },
+    formatPhone(phone) {
+      if (!phone) return '';
+      let cleaned = phone.trim().replace(/(?!^\+)[^\d]/g, '');
+      if (cleaned.startsWith('00')) {
+        cleaned = '+' + cleaned.slice(2);
+      }
+      return cleaned.replace(/(\+?\d{1,3})(\d{2,3})(\d{2,3})(\d{2,3})(\d{0,3})/, 
+                            (_, p1, p2, p3, p4, p5) => {
+        return [p1, p2, p3, p4, p5].filter(Boolean).join(' ');
+      });
+    },
+    calculateAge(dob) {
+      if (!dob) return null;
+      const birthDate = new Date(dob);
+      const today = new Date();
+      let age = today.getFullYear() - birthDate.getFullYear();
+      const monthDiff = today.getMonth() - birthDate.getMonth();
+      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+        age--;
+      }
+      return age;
+    },
+    getPatientName(patientId) {
+      const patient = this.patients.find(p => p.id === patientId);
+      return patient ? `${patient.first_name} ${patient.last_name}` : 'Unknown Patient';
+    },
+    getPatientDetails(patientId) {
+      const patient = this.patients.find(p => p.id === patientId);
+      if (!patient) return null;
+      
+      return {
+        gender: patient.gender,
+        age: this.calculateAge(patient.date_of_birth),
+        phone: patient.phone
+      };
+    },
+    viewAppointment(appointment) {
+      this.viewingAppointment = { ...appointment };
+    },
+    closeViewModal() {
+      this.viewingAppointment = null;
+    },
+    confirmDelete(id) {
+      this.appointmentToDelete = id;
+      this.showDeleteConfirm = true;
+    },
+    async deleteAppointment() {
+      try {
+        const response = await fetch(`http://localhost:3000/api/appointments/${this.appointmentToDelete}`, {
+          method: 'DELETE',
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to delete appointment');
+        }
+
+        this.appointments = this.appointments.filter(a => a.id !== this.appointmentToDelete);
+        this.showDeleteConfirm = false;
+        this.appointmentToDelete = null;
+      } catch (error) {
+        this.error = error.message;
+      }
+    },
+  }
+};
+</script>
