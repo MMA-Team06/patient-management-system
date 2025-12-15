@@ -236,3 +236,342 @@
     </div>
   </div>
 </template>
+<script>
+import { debounce } from 'lodash';
+
+export default {
+  name: 'PrescriptionManager', 
+  data() {
+    return {
+      prescriptions: [],
+      patients: [],
+      loading: false,
+      error: '',
+      filterStatus: 'active',
+      searchQuery: '',
+      viewingPrescription: null,
+      showDeleteConfirm: false,
+      prescriptionToDelete: null,
+      searchDebounce: null
+    };
+  },
+ created() {
+  // Initialize with default filter
+  this.filterStatus = 'active';
+  this.searchDebounce = debounce(this.fetchPrescriptions, 500);
+  
+  // Fetch initial data
+  this.fetchPrescriptions();
+},
+  mounted() {
+    this.fetchPrescriptions();
+    this.fetchPatients();
+  },
+  methods: {
+async fetchPrescriptions() {
+  this.loading = true;
+  this.error = '';
+  
+  try {
+    let url = `http://localhost:3000/api/prescriptions?status=${this.filterStatus}&search=${this.searchQuery}&page=${this.currentPage}&limit=${this.itemsPerPage}`;
+    
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+      throw new Error('Failed to fetch prescriptions');
+    }
+    
+    const data = await response.json();
+    
+    // Process prescriptions with better error handling
+    this.prescriptions = await Promise.all(
+      (data.prescriptions || data).map(async prescription => {
+        // Check if we need to fetch patient details
+        const needsPatientDetails =!prescription.patient_name || 
+                                   !prescription.patient_gender || 
+                                   !prescription.patient_dob || 
+                                   !prescription.patient_phone;
+        
+        if (needsPatientDetails) {
+          const patientId = prescription.patient_id || prescription.patient;
+          
+          // First check our local patients array
+          const patient = this.patients.find(p => p.id === patientId);
+          
+          if (patient) {
+            // Use patient data from already loaded patients
+            return {
+              ...prescription,
+              patient_name: `${patient.first_name} ${patient.last_name}`,
+              patient_gender: patient.gender,
+              patient_dob: patient.date_of_birth,
+              patient_phone: patient.phone
+            };
+          } else if (patientId) {
+            // Fetch from API if not in local array
+            try {
+              const patientResponse = await fetch(`http://localhost:3000/api/patients/${patientId}`);
+              if (patientResponse.ok) {
+                const patientData = await patientResponse.json();
+                return {
+                  ...prescription,
+                  patient_name: `${patientData.first_name} ${patientData.last_name}`,
+                  patient_gender: patientData.gender,
+                  patient_dob: patientData.date_of_birth,
+                  patient_phone: patientData.phone
+                };
+              }
+            } catch (error) {
+              console.error('Error fetching patient:', error);
+            }
+          }
+        }
+        
+        // Return with existing data if patient info is already present or fetch failed
+        return prescription;
+      })
+    );
+    
+  } catch (error) {
+    this.error = error.message;
+  } finally {
+    this.loading = false;
+  }
+},
+
+    getPatientName(patientId) {
+      const patient = this.patients.find(p => p.id === patientId);
+      return patient ? `${patient.first_name} ${patient.last_name}` : 'Unknown Patient';
+    },
+    getPatientDetails(patientId) {
+      const patient = this.patients.find(p => p.id === patientId);
+      if (!patient) return null;
+      
+      return {
+        gender: patient.gender,
+        age: this.calculateAge(patient.date_of_birth),
+        phone: patient.phone
+      };
+    },
+async fetchPatientForPrescription(prescription) {
+  try {
+    const patientId = prescription.patient_id;
+    if (!patientId) return;
+    
+    const response = await fetch(`http://localhost:3000/api/patients/${patientId}`);
+    if (response.ok) {
+      const patientData = await response.json();
+      
+      // Update the viewing prescription with complete patient data
+      this.viewingPrescription.patient_name = `${patientData.first_name} ${patientData.last_name}`;
+      this.viewingPrescription.patient_gender = patientData.gender;
+      this.viewingPrescription.patient_dob = patientData.date_of_birth;
+      this.viewingPrescription.patient_phone = patientData.phone;
+    }
+  } catch (error) {
+    console.error('Error fetching patient for prescription:', error);
+  }
+},
+    async fetchPatients() {
+      try {
+        const response = await fetch('http://localhost:3000/api/patients');
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch patients');
+        }
+        
+        const data = await response.json();
+        this.patients = data;
+      } catch (error) {
+        console.error('Error fetching patients:', error);
+      }
+    },
+    handleSearch() {
+      this.searchDebounce();
+    },
+    getPrescriptionStatus(prescription) {
+      if (!prescription.expiry_date) return 'active';
+      const today = new Date();
+      const expiryDate = new Date(prescription.expiry_date);
+      return expiryDate < today ? 'expired' : 'active';
+    },
+    
+    formatDate(dateString) {
+      if (!dateString) return 'N/A';
+      const date = new Date(dateString);
+      return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    },
+formatPhone(phone) {
+  if (!phone) return '';
+  
+  let cleaned = phone.trim().replace(/(?!^\+)[^\d]/g, '');
+
+  if (cleaned.startsWith('00')) {
+    cleaned = '+' + cleaned.slice(2);
+  }
+
+  return cleaned.replace(/(\+?\d{1,3})(\d{2,3})(\d{2,3})(\d{2,3})(\d{0,3})/, 
+                         (_, p1, p2, p3, p4, p5) => {
+    return [p1, p2, p3, p4, p5].filter(Boolean).join(' ');
+  });
+},
+    calculateAge(dob) {
+      if (!dob) return 'N/A';
+      const birthDate = new Date(dob);
+      const today = new Date();
+      let age = today.getFullYear() - birthDate.getFullYear();
+      const monthDiff = today.getMonth() - birthDate.getMonth();
+      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+        age--;
+      }
+      return age;
+    },
+viewPrescription(prescription) {
+  // Create a deep copy to avoid modifying the original data
+  this.viewingPrescription = JSON.parse(JSON.stringify(prescription));
+  
+  // Ensure patient information is complete
+  if (!this.viewingPrescription.patient_name || this.viewingPrescription.patient_name === 'Unknown Patient') {
+    // Try to get patient info from the patients array if we have it
+    const patientId = this.viewingPrescription.patient_id;
+    const patient = this.patients.find(p => p.id === patientId);
+    
+    if (patient) {
+      this.viewingPrescription.patient_name = `${patient.first_name} ${patient.last_name}`;
+      this.viewingPrescription.patient_gender = patient.gender;
+      this.viewingPrescription.patient_dob = patient.date_of_birth;
+      this.viewingPrescription.patient_phone = patient.phone;
+    }
+  }
+  
+  // If we still don't have complete patient data, fetch it directly
+  if (!this.viewingPrescription.patient_name || this.viewingPrescription.patient_name === 'Unknown Patient') {
+    this.fetchPatientForPrescription(this.viewingPrescription);
+  }
+},
+    closeViewModal() {
+      this.viewingPrescription = null;
+    },
+    printPrescription(prescription) {
+      console.log('Printing prescription:', prescription);
+      alert('Print functionality would open a print dialog in a real application');
+    },
+
+    createNewMedication() {
+      return {
+        name: '',
+        dosage: '',
+        frequency: '',
+        duration: ''
+      };
+    },
+    addMedication() {
+      this.editingPrescription.medications.push(this.createNewMedication());
+    },
+    removeMedication(index) {
+      this.editingPrescription.medications.splice(index, 1);
+    },
+    cancelEdit() {
+      this.editingPrescription = null;
+    },
+async savePrescription() {
+  try {
+    // Validate required fields
+    if (!this.editingPrescription.patient_id || !this.editingPrescription.issue_date) {
+      throw new Error('Patient and issue date are required');
+    }
+    
+    if (!this.editingPrescription.medications || this.editingPrescription.medications.length === 0) {
+      throw new Error('At least one medication is required');
+    }
+    
+    // Validate each medication
+    for (const med of this.editingPrescription.medications) {
+      if (!med.name || !med.dosage || !med.frequency || !med.duration) {
+        throw new Error('All medication fields are required');
+      }
+    }
+
+    // Prepare the data to send
+    const prescriptionData = {
+      patient_id: this.editingPrescription.patient_id,
+      issue_date: this.editingPrescription.issue_date,
+      expiry_date: this.editingPrescription.expiry_date || null,
+      medications: this.editingPrescription.medications,
+      notes: this.editingPrescription.notes || ''
+    };
+
+    console.log('Sending prescription data:', prescriptionData);
+
+    const method = this.editingPrescription.id ? 'PUT' : 'POST';
+    const url = this.editingPrescription.id 
+      ? `http://localhost:3000/api/prescriptions/${this.editingPrescription.id}`
+      : 'http://localhost:3000/api/prescriptions';
+    
+    const response = await fetch(url, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(prescriptionData),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(errorText || 'Failed to save prescription');
+    }
+
+    const responseData = await response.json();
+    console.log('Server response:', responseData);
+
+    // Update local state
+    if (this.editingPrescription.id) {
+      const index = this.prescriptions.findIndex(p => p.id === responseData.prescription.id);
+      if (index !== -1) {
+        this.prescriptions.splice(index, 1, responseData.prescription);
+      }
+    } else {
+      this.prescriptions.unshift(responseData.prescription);
+    }
+
+    this.editingPrescription = null;
+    this.$notify({
+      title: 'Success',
+      message: 'Prescription saved successfully',
+      type: 'success'
+    });
+  } catch (error) {
+    console.error('Error saving prescription:', error);
+    this.$notify({
+      title: 'Error',
+      message: error.message || 'Failed to save prescription',
+      type: 'error'
+    });
+  }
+},
+    confirmDelete(id) {
+      this.prescriptionToDelete = id;
+      this.showDeleteConfirm = true;
+    },
+async deletePrescription() {
+  try {
+    const response = await fetch(`http://localhost:3000/api/prescriptions/${this.prescriptionToDelete}`, {
+      method: 'DELETE',
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to delete prescription');
+    }
+
+    await response.json();
+    this.prescriptions = this.prescriptions.filter(p => p.id !== this.prescriptionToDelete);
+    this.showDeleteConfirm = false;
+    this.prescriptionToDelete = null;
+  } catch (error) {
+    this.error = error.message;
+  }
+},
+
+  }
+};
+</script>git add frontend/src/components/Prescriptions
