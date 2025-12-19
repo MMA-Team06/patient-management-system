@@ -187,20 +187,6 @@ app.delete('/api/patients/:id', async (req, res) => {
     });
   }
 });
-
-// Error handling middleware
-app.use((err, req, res, next) => {
-  console.error('Server error:', err);
-  res.status(500).json({
-    error: 'Internal server error',
-    message: err.message
-  });
-});
-
-// Start server
-app.listen(port, () => {
-  console.log(`Server running on http://localhost:${port}`);
-});
         // Get Appointment Route
 app.get('/api/appointments', async (req, res) => {
   try {
@@ -554,3 +540,17 @@ app.get('/api/dashboard/recent-activity', async (req, res) => {
 });
 
 //test
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error('Server error:', err);
+  res.status(500).json({
+    error: 'Internal server error',
+    message: err.message
+  });
+});
+
+// Start server
+app.listen(port, () => {
+  console.log(`Server running on http://localhost:${port}`);
+});
+
