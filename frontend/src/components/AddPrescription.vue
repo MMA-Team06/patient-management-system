@@ -1,15 +1,15 @@
 <template>
-  <div class="appointment-form-container">
+  <div class="prescription-form-container">
     <div class="form-header">
-      <h2><i class="fas fa-calendar-plus"></i> New Appointment</h2>
-      <p>Schedule a new appointment for your patient</p>
+      <h2><i class="fas fa-file-prescription"></i> New Prescription</h2>
+      <p>Create a new prescription for your patient</p>
     </div>
     
     <div class="form-card">
       <form @submit.prevent="submitForm">
         <div class="form-group">
           <label>Patient <span class="required">*</span></label>
-          <select v-model="appointment.patient_id" required>
+          <select v-model="prescription.patient_id" required>
             <option v-for="patient in patients" :value="patient.id" :key="patient.id">
               {{ patient.first_name }} {{ patient.last_name }}
             </option>
@@ -18,37 +18,53 @@
 
         <div class="form-grid">
           <div class="form-group">
-            <label>Date <span class="required">*</span></label>
-            <input type="date" v-model="appointment.date" required>
+            <label>Issue Date <span class="required">*</span></label>
+            <input type="date" v-model="prescription.issue_date" required>
           </div>
           <div class="form-group">
-            <label>Time <span class="required">*</span></label>
-            <input type="time" v-model="appointment.time" required>
-          </div>
-          <div class="form-group">
-            <label>Duration (minutes) <span class="required">*</span></label>
-            <input type="number" v-model="appointment.duration" min="15" required>
+            <label>Expiry Date</label>
+            <input type="date" v-model="prescription.expiry_date">
           </div>
         </div>
 
-        <div class="form-group">
-          <label>Purpose <span class="required">*</span></label>
-          <select v-model="appointment.purpose" required>
-            <option value="checkup">Regular Checkup</option>
-            <option value="followup">Follow-up</option>
-            <option value="consultation">Consultation</option>
-            <option value="treatment">Treatment</option>
-          </select>
+        <div class="medication-section">
+          <h3>Medications</h3>
+          <div class="medication-item" v-for="(med, index) in prescription.medications" :key="index">
+            <div class="form-grid">
+              <div class="form-group">
+                <label>Name <span class="required">*</span></label>
+                <input v-model="med.name" required>
+              </div>
+              <div class="form-group">
+                <label>Dosage <span class="required">*</span></label>
+                <input v-model="med.dosage" required>
+              </div>
+              <div class="form-group">
+                <label>Frequency <span class="required">*</span></label>
+                <input v-model="med.frequency" required>
+              </div>
+              <div class="form-group">
+                <label>Duration <span class="required">*</span></label>
+                <input v-model="med.duration" required>
+              </div>
+            </div>
+            <button type="button" @click="removeMedication(index)" class="btn btn-danger">
+              <i class="fas fa-trash"></i> Remove
+            </button>
+          </div>
+          <button type="button" @click="addMedication" class="btn btn-outline">
+            <i class="fas fa-plus"></i> Add Medication
+          </button>
         </div>
 
         <div class="form-group">
           <label>Notes</label>
-          <textarea v-model="appointment.notes" rows="4"></textarea>
+          <textarea v-model="prescription.notes" rows="4"></textarea>
         </div>
 
         <div class="form-actions">
           <button type="submit" class="btn btn-primary">
-            <i class="fas fa-save"></i> Schedule Appointment
+            <i class="fas fa-save"></i> Save Prescription
           </button>
           <button type="button" @click="resetForm" class="btn btn-outline">
             <i class="fas fa-undo"></i> Reset
@@ -61,57 +77,97 @@
 
 <script>
 export default {
-  name: 'AddAppointment',
+  name: 'AddPrescription',
   data() {
     return {
-      appointment: {
+      prescription: {
         patient_id: '',
-        date: new Date().toISOString().split('T')[0],
-        time: '09:00',
-        duration: 30,
-        purpose: 'checkup',
+        issue_date: new Date().toISOString().split('T')[0],
+        expiry_date: '',
+        medications: [{
+          name: '',
+          dosage: '',
+          frequency: '',
+          duration: '',
+          instructions: ''
+        }],
         notes: ''
       },
       patients: []
     }
   },
   methods: {
-  async submitForm() {
-    try {
-      const response = await fetch('http://localhost:3000/api/appointments', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          patient_id: this.appointment.patient_id,
-          date: this.appointment.date,
-          time: this.appointment.time,
-          duration: this.appointment.duration,
-          purpose: this.appointment.purpose,
-          notes: this.appointment.notes
-        })
+    addMedication() {
+      this.prescription.medications.push({
+        name: '',
+        dosage: '',
+        frequency: '',
+        duration: '',
+        instructions: ''
       });
-
-      if (!response.ok) throw new Error('Failed to save appointment');
-      const result = await response.json();
-      console.log('Appointment created:', result); 
-      
-     
-      this.$router.push('/appointments');
-      
-    } catch (error) {
-      console.error('Error:', error);
-      alert('Failed to schedule appointment: ' + error.message);
+    },
+    removeMedication(index) {
+      this.prescription.medications.splice(index, 1);
+    },
+async submitForm() {
+  try {
+    // Validate required fields
+    if (!this.prescription.patient_id || !this.prescription.issue_date) {
+      throw new Error('Patient and issue date are required');
     }
-  },
+    
+    // Validate medications
+    if (!this.prescription.medications || this.prescription.medications.length === 0) {
+      throw new Error('At least one medication is required');
+    }
+    
+    for (const med of this.prescription.medications) {
+      if (!med.name || !med.dosage || !med.frequency || !med.duration) {
+        throw new Error('All medication fields are required');
+      }
+    }
+
+    const response = await fetch('http://localhost:3000/api/prescriptions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        patient_id: this.prescription.patient_id,
+        issue_date: this.prescription.issue_date,
+        expiry_date: this.prescription.expiry_date || null,
+        medications: this.prescription.medications,
+        notes: this.prescription.notes || ''
+      })
+    });
+
+    const result = await response.json();
+    
+    if (!response.ok) {
+      // Use server-provided error message if available
+      throw new Error(result.message || result.error || 'Failed to save prescription');
+    }
+    
+   
+    this.$router.push('/prescriptions');
+    
+  } catch (error) {
+    console.error('Error:', error);
+    alert(`Failed to save prescription: ${error.message}`);
+  }
+},
     resetForm() {
-      this.appointment = {
+      this.prescription = {
         patient_id: '',
-        date: new Date().toISOString().split('T')[0],
-        time: '09:00',
-        duration: 30,
-        purpose: 'checkup',
+        issue_date: new Date().toISOString().split('T')[0],
+        expiry_date: '',
+        medications: [{
+          name: '',
+          dosage: '',
+          frequency: '',
+          duration: '',
+          instructions: ''
+        }],
         notes: ''
       };
     },
@@ -309,6 +365,7 @@ textarea {
   }
 }
 
+/* Color Variables (should match your existing theme) */
 :root {
   --primary-color: #3498db;
   --secondary-color: #2c3e50;
