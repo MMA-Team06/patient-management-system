@@ -1,4 +1,4 @@
-import { createRouter, createWebHistory } from 'vue-router'
+import VueRouter from 'vue-router'
 import Dashboard from '@/components/Dashboard.vue'
 import AddPatient from '@/components/AddPatient.vue'
 import ViewPatients from '@/components/ViewPatients.vue'
@@ -73,16 +73,18 @@ const routes = [
   }
 ]
 
-const router = createRouter({
-  history: createWebHistory(),
+const router = new VueRouter({
+  mode: 'history',
+  base: process.env.BASE_URL,
   routes,
   scrollBehavior() {
-    return { top: 0 }
+    return { x: 0, y: 0 }
   }
 })
 
-router.beforeEach((to) => {
+router.beforeEach((to, from, next) => {
   document.title = to.meta.title ? `${to.meta.title} | Healthcare Clinic` : 'Healthcare Clinic'
+  next()
 })
 
 export default router
