@@ -2,20 +2,21 @@ const express = require('express');
 const mysql = require('mysql2/promise'); // promise-based API
 const cors = require('cors');
 const bodyParser = require('body-parser');
+require('dotenv').config(); 
 
 const app = express();
-const port = 3000;
+const port = process.env.PORT || 3000;
 
 // Middleware
 app.use(cors());
 app.use(bodyParser.json());
 
-// Database connection pool
+// Database connection pool - using environment variables
 const pool = mysql.createPool({
-  host: 'localhost',
-  user: 'root',
-  password: 'your passcode',
-  database: 'patient_management',
+  host: process.env.DB_HOST || 'localhost',
+  user: process.env.DB_USER || 'root',
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME || 'patient_management',
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0

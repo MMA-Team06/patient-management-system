@@ -1,3 +1,4 @@
+import Vue from 'vue'
 import VueRouter from 'vue-router'
 import Dashboard from '@/components/Dashboard.vue'
 import AddPatient from '@/components/AddPatient.vue'
@@ -6,6 +7,8 @@ import Appointments from '@/components/Appointments.vue'
 import Prescriptions from '@/components/Prescriptions.vue'
 import AddPrescription from '@/components/AddPrescription.vue'
 import AddAppointment from '@/components/AddAppointment.vue'
+
+Vue.use(VueRouter)
 
 const routes = [
   {
